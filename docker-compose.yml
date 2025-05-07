@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres-container
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=celestia69
+    ports:
+      - "5432:5432"
+
+  cloudapi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=celestia6(
+      - SPRING_JPA_GENERATE-DDL=true
+      - SPRING_JPA_OPEN_IN_VIEW=false
+      - SPRING_APPLICATION_NAME=cloudapi
+      - SPRINGDOC_SWAGGER-UI_URL=/openapi.yaml
+      - SPRINGDOC_API-DOCS_ENABLED=false
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  client:
+    container_name: frontend-client
+    build:
+      context: cloud_storage-frontend
+      dockerfile: Dockerfile
+    image: cloud-storage-front:latest
+    ports:
+      - "8080:8080"

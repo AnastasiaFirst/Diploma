@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="1" author="Muratova Anastasia">
+        <insert tableName="user_entity_role">
+            <column name="user_entity_id" valueNumeric="1"/>
+            <column name="role" value="ROLE_ADMIN"/>
+        </insert>
+
+        <insert tableName="user_entity_role">
+            <column name="user_entity_id" valueNumeric="2"/>
+            <column name="role" value="ROLE_USER"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

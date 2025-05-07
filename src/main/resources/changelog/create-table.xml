@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet id="create-table-users" author="Muratova Anastasia">
+        <createTable tableName="users">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="login" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="password" type="varchar(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="create-table-files" author="Muratova Anastasia">
+        <createTable tableName="files">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file_name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="hash" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file" type="bytea"/>
+            <column name="size" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file_upload_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+    <changeSet author="Muratova Anastasia" id="1692599548266-4">
+        <addForeignKeyConstraint baseTableName="files"
+                                 baseColumnNames="user_id"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_users_files"/>
+    </changeSet>
+
+</databaseChangeLog>
