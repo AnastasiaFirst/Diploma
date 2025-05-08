@@ -3,9 +3,7 @@ package com.example.cloud_service_diploma.service;
 import com.example.cloud_service_diploma.entity.FileEntity;
 import com.example.cloud_service_diploma.entity.UserEntity;
 import com.example.cloud_service_diploma.exception.ErrorInputData;
-import com.example.cloud_service_diploma.exception.UserNotAuthorized;
 import com.example.cloud_service_diploma.model.File;
-import com.example.cloud_service_diploma.model.dto.FileDTO;
 import com.example.cloud_service_diploma.repositories.FileRepository;
 import com.example.cloud_service_diploma.security.JWTToken;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -27,9 +26,6 @@ class FileServiceTest {
     private FileRepository fileRepository;
 
     @Mock
-    private AuthorizationService authorizationService;
-
-    @Mock
     private JWTToken jwtToken;
 
     @InjectMocks
@@ -41,25 +37,22 @@ class FileServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
-        String authToken = "mockToken";
 
         mockFile = mock(MultipartFile.class);
-        when(mockFile.getName()).thenReturn("testFile.txt");
+        when(mockFile.getOriginalFilename()).thenReturn("testFile.txt");
         when(mockFile.getBytes()).thenReturn("test content".getBytes());
         when(mockFile.getSize()).thenReturn(12L);
 
-        when(jwtToken.getAuthenticatedUser()).thenReturn(new UserEntity(userId));
-        when(jwtToken.validateToken(authToken)).thenReturn(true);
+        when(jwtToken.getAuthenticatedUser ()).thenReturn(new UserEntity(userId));
+        when(jwtToken.validateToken(anyString())).thenReturn(true);
     }
 
     @Test
     void testAddFileSuccess() throws IOException {
-
-        String authToken = "mockToken";
         String fileName = "testFile.txt";
         when(fileRepository.findFileByUserEntityIdAndFileName(userId, fileName)).thenReturn(Optional.empty());
 
-        File result = fileService.addFile(mockFile, fileName, authToken);
+        File result = fileService.addFile(mockFile, fileName, userId);
 
         assertNotNull(result);
         assertEquals("testFile.txt", result.getHash());
@@ -67,20 +60,7 @@ class FileServiceTest {
     }
 
     @Test
-    void testAddFileUserNotAuthorized() {
-
-        String authToken = "mockToken";
-        when(jwtToken.getAuthenticatedUser()).thenReturn(null);
-
-        UserNotAuthorized exception = assertThrows(UserNotAuthorized.class, () -> {
-            fileService.addFile(mockFile, "file.txt", authToken);
-        });
-        assertEquals("Пользователь null не авторизован.", exception.getMessage());
-    }
-
-    @Test
     void testGetFileSuccess() throws IOException {
-        String authToken = "mockToken";
         String fileName = "testFile.txt";
         FileEntity fileEntity = new FileEntity();
         fileEntity.setHash("testFile.txt");
@@ -88,27 +68,16 @@ class FileServiceTest {
 
         when(fileRepository.findFileByUserEntityIdAndFileName(userId, fileName)).thenReturn(Optional.of(fileEntity));
 
-        File result = fileService.getFile(fileName, authToken);
+        File result = fileService.getFile(fileName, userId);
 
         assertNotNull(result);
         assertEquals("testFile.txt", result.getHash());
-    }
-    @Test
-    void testGetFileFileNotFound() {
-        String authToken = "validToken";
-        when(fileRepository.findFileByUserEntityIdAndFileName(userId, "nonExistentFile.txt")).thenReturn(Optional.empty());
-
-        ErrorInputData exception = assertThrows(ErrorInputData.class, () -> {
-            fileService.getFile("nonExistentFile.txt", authToken);
-        });
-        assertEquals("Файл с именем: { nonExistentFile.txt } не найден", exception.getMessage());
     }
 
     @Test
     void testRenameFileSuccess() {
         String oldFileName = "oldFile.txt";
         String newFileName = "newFile.txt";
-        String authToken = "validToken";
 
         FileEntity fileEntity = new FileEntity();
         fileEntity.setId(1L);
@@ -117,11 +86,9 @@ class FileServiceTest {
         when(fileRepository.findFileByUserEntityIdAndFileName(userId, oldFileName)).thenReturn(Optional.of(fileEntity));
         when(fileRepository.findFileByUserEntityIdAndFileName(userId, newFileName)).thenReturn(Optional.empty());
 
-        FileDTO fileDto = new FileDTO();
-        fileDto.setFileName(newFileName);
+        ResponseEntity<String> responseEntity = fileService.renameFile(oldFileName, newFileName, userId);
 
-        fileService.renameFile(oldFileName, fileDto, authToken);
-
+        assertEquals("У файла с именем oldFile.txt успешно изменено имя на newFile.txt.", responseEntity.getBody());
         verify(fileRepository).save(fileEntity);
         assertEquals(newFileName, fileEntity.getFileName());
     }
@@ -129,14 +96,46 @@ class FileServiceTest {
     @Test
     void testRenameFileInvalidFileName() {
         String oldFileName = "oldFile.txt";
-        String authToken = "validToken";
-        FileDTO fileDto = new FileDTO();
-        fileDto.setFileName("");
+        String newFileName = null;
 
         ErrorInputData exception = assertThrows(ErrorInputData.class, () -> {
-            fileService.renameFile(oldFileName, fileDto, authToken);
+            fileService.renameFile(oldFileName, newFileName, userId);
         });
-        assertEquals("Некорректные входные данные: имя файла не может быть пустым", exception.getMessage());
+        assertEquals("Некорректные входные данные: новое имя файла не может быть пустым", exception.getMessage());
     }
 
+    @Test
+    void testDeleteFileSuccess() {
+        String fileName = "testFile.txt";
+        FileEntity fileEntity = new FileEntity();
+        fileEntity.setId(1L);
+        fileEntity.setFileName(fileName);
+
+        when(fileRepository.findFileByUserEntityIdAndFileName(userId, fileName)).thenReturn(Optional.of(fileEntity));
+
+        assertDoesNotThrow(() -> fileService.deleteFile(fileName, userId));
+        verify(fileRepository).deleteById(fileEntity.getId());
+    }
+
+    @Test
+    void testDeleteFileNotFound() {
+        String fileName = "nonExistentFile.txt";
+
+        when(fileRepository.findFileByUserEntityIdAndFileName(userId, fileName)).thenReturn(Optional.empty());
+
+        ErrorInputData exception = assertThrows(ErrorInputData.class, () -> {
+            fileService.deleteFile(fileName, userId);
+        });
+        assertEquals("Файл с именем: { nonExistentFile.txt } не найден", exception.getMessage());
+    }
+
+    @Test
+    void testGetAllFilesInvalidLimit() {
+        int limit = 0;
+
+        ErrorInputData exception = assertThrows(ErrorInputData.class, () -> {
+            fileService.getAllFiles(limit, userId);
+        });
+        assertEquals("Лимит должен быть больше нуля.", exception.getMessage());
+    }
 }
