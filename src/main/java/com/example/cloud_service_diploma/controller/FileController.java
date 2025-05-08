@@ -2,6 +2,8 @@ package com.example.cloud_service_diploma.controller;
 
 import com.example.cloud_service_diploma.model.File;
 import com.example.cloud_service_diploma.model.dto.FileDTO;
+import com.example.cloud_service_diploma.model.dto.FileRenameRequest;
+import com.example.cloud_service_diploma.security.JWTToken;
 import com.example.cloud_service_diploma.service.FileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,21 +17,35 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 public class FileController {
     private static final Logger log = LoggerFactory.getLogger(FileController.class);
 
     private final FileService fileService;
+    private final JWTToken jwtToken;
 
     @Autowired
-    public FileController(FileService fileService) {
+    public FileController(FileService fileService, JWTToken jwtToken) {
         this.fileService = fileService;
+        this.jwtToken = jwtToken;
+    }
+
+    private Long getUserIdFromToken(String authToken) {
+        if (authToken == null || !authToken.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
+        }
+
+        String token = authToken.substring(7);
+        if (!jwtToken.validateToken(token)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
+        }
+
+        return jwtToken.getAuthenticatedUser () != null ? jwtToken.getAuthenticatedUser ().getId() : null;
     }
 
     @PostMapping("/cloud/file")
-    public ResponseEntity<File> addFile(
+    public ResponseEntity<Void> addFile(
             @RequestHeader(value = "Authorization", required = true) String authToken,
             @RequestParam(name = "filename") String fileName,
             @RequestPart(name = "file") MultipartFile file
@@ -37,33 +53,32 @@ public class FileController {
 
         log.info("Запрос на загрузку файла на сервер: {}", fileName);
 
+        Long userID = getUserIdFromToken(authToken);
+
         if (file.isEmpty()) {
         log.info("Файл для загрузки не выбран: {}", file.isEmpty());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл не выбран");
     }
         log.info("Файл для загрузки на сервер: {}", fileName);
-        File savedFile = fileService.addFile(file, fileName, authToken);
-        return new ResponseEntity<>(savedFile, HttpStatus.OK);
+        fileService.addFile(file, fileName, userID);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/cloud/file")
     public ResponseEntity<byte[]> downloadFile(
-            @RequestHeader(value = "auth-token", required = true) String authToken,
+            @RequestHeader(value = "Authorization", required = true) String authToken,
             @RequestParam("filename") String filename) throws IOException {
 
-        if (!isValidToken(authToken)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
-        }
+        Long userID = getUserIdFromToken(authToken);
 
         try {
-            File file = fileService.getFile(filename, authToken);
+            File file = fileService.getFile(filename, userID);
 
             if (file == null || file.getFile() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл не найден или неверный запрос");
             }
 
             byte[] fileBytes = file.getFile();
-
             String encodedFileName = URLEncoder.encode(filename, StandardCharsets.UTF_8)
                     .replace("+", "%20");
 
@@ -84,80 +99,44 @@ public class FileController {
 
     @PutMapping("/cloud/file")
     public ResponseEntity<Void> editFileName(
-            @RequestHeader(value = "auth-token", required = true) String authToken,
+            @RequestHeader(value = "Authorization", required = true) String authToken,
             @RequestParam("filename") String filename,
-            @RequestBody(required = false) Map<String, String> requestBody) {
+            @RequestBody FileRenameRequest request) {
 
-        if (!isValidToken(authToken)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
-        }
+        Long userID = getUserIdFromToken(authToken);
 
-        if (requestBody == null || !requestBody.containsKey("filename")) {
+        String newFileName = request.getNewFileName();
+
+        if (newFileName == null || newFileName.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неправильный запрос на изменение имени файла");
         }
 
-        String newFileName = requestBody.get("filename");
-
-        try {
-            FileDTO fileDto = FileDTO.build(newFileName);
-
-            fileService.renameFile(filename, fileDto, authToken);
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Ошибка при переименовании файла", e);
-        }
+        log.info("Запрос на изменение имени файла: {} на {}", filename, newFileName);
+        fileService.renameFile(filename, newFileName, userID);
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/cloud/file")
     public ResponseEntity<Void> deleteFile(
-            @RequestHeader(value = "auth-token", required = true) String authToken,
+            @RequestHeader(value = "Authorization", required = true) String authToken,
             @RequestParam("filename") String filename) {
 
-        if (!isValidToken(authToken)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
-        }
+        Long userID = getUserIdFromToken(authToken);
 
-        if (filename == null || filename.trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Имя файла не может быть пустым");
-        }
-
-        try {
-            fileService.deleteFile(filename, authToken);
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Ошибка при удалении файла", e);
-        }
+        log.info("Запрос на удаление файла: {} для пользователя с ID {}", filename, userID);
+        fileService.deleteFile(filename, userID);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/cloud/list")
     public ResponseEntity<List<FileDTO>> listFiles(
-            @RequestHeader(value = "auth-token", required = true) String authToken,
+            @RequestHeader(value = "Authorization", required = true) String authToken,
             @RequestParam(value = "limit", defaultValue = "10", required = false) int limit) {
 
-        if (!isValidToken(authToken)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неавторизован");
-        }
+        Long userID = getUserIdFromToken(authToken);
 
-        if (limit <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Лимит должен быть положительным числом");
-        }
-
-        try {
-            List<FileDTO> files = fileService.getAllFiles(limit, authToken);
-
-            List<FileDTO> fileDTO = files.stream()
-                    .map(file -> {
-                        return new FileDTO(file.getFileName(), (int) file.getSize());
-                    })
-                    .toList();
-
-            return new ResponseEntity<>(fileDTO, HttpStatus.OK);
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    private boolean isValidToken(String authToken) {
-        return authToken != null && !authToken.isEmpty();
+        log.info("Запрос на получение всех файлов для пользователя с ID {} с лимитом {}", userID, limit);
+        List<FileDTO> files = fileService.getAllFiles(limit, userID);
+        return ResponseEntity.ok(files);
     }
 }
