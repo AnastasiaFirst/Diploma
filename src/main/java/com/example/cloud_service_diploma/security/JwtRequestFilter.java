@@ -3,7 +3,6 @@ package com.example.cloud_service_diploma.security;
 import com.example.cloud_service_diploma.entity.UserEntity;
 import com.example.cloud_service_diploma.enumiration.Role;
 import com.example.cloud_service_diploma.repositories.UserRepository;
-import com.example.cloud_service_diploma.service.FileService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,22 +57,6 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             String headerName = headerNames.nextElement();
             String headerValue = request.getHeader(headerName);
             log.info("Header: {} = {}", headerName, headerValue);
-        }
-
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            jwt = authorizationHeader.substring(7);
-
-            boolean isValid = jwtService.validateToken(jwt);
-
-            if (isValid) {
-                username = jwtService.extractUsername(jwt);
-                log.info("Username from JWT: {}", username);
-                log.info("Token is active");
-            } else {
-                log.warn("Invalid JWT Token: isValid=" + isValid);
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT Token");
-                return;
-            }
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
