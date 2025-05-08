@@ -6,15 +6,11 @@ import com.example.cloud_service_diploma.model.dto.UserDto;
 import com.example.cloud_service_diploma.repositories.UserRepository;
 import com.example.cloud_service_diploma.security.JWTToken;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
