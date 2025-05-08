@@ -2,9 +2,11 @@ package com.example.cloud_service_diploma.security;
 
 import com.example.cloud_service_diploma.config.AuthenticationConfigConstants;
 import com.example.cloud_service_diploma.entity.UserEntity;
+import com.example.cloud_service_diploma.enumiration.Role;
 import com.example.cloud_service_diploma.repositories.UserRepository;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.NonNull;
 import org.slf4j.Logger;
@@ -15,7 +17,6 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.security.Key;
-import java.util.Base64;
 import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,11 +58,9 @@ public class JWTToken {
     public String generateToken(@NonNull UserEntity userEntity) throws IllegalArgumentException {
         log.info("Generating token for user: {}", userEntity.getLogin());
         this.userEntity = userEntity;
+        Set<Role> role = userEntity.getRole();
         Date now = new Date();
         Date exp = new Date(System.currentTimeMillis() + 3600000);
-
-        byte[] keyBytes = hexStringToByteArray(secretKey);
-        Key key = Keys.hmacShaKeyFor(keyBytes);
 
         log.info("User  ID being set in token: {}", userEntity.getId());
         log.info("Генерация токена для пользователя: {}", userEntity.getLogin());
@@ -69,15 +68,23 @@ public class JWTToken {
         String token = Jwts.builder()
                 .setId(String.valueOf(userEntity.getId()))
                 .setSubject(userEntity.getLogin())
+                .claim("role", role)
                 .setIssuedAt(now)
                 .setNotBefore(now)
                 .setExpiration(exp)
-                .signWith(key)
+                .signWith(getSgningKey())
                 .compact();
         log.info("Auth-token {} сформирован", token);
         activeTokens.add(token);
         log.info("Token added to active tokens: {}", token);
         return token;
+    }
+
+    public SecretKey getSgningKey() {
+
+        byte[] keyBytes = Decoders.BASE64URL.decode(secretKey);
+
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public boolean validateToken(String token) {
@@ -99,9 +106,9 @@ public class JWTToken {
         }
     }
 
-//    public boolean isTokenActive(String token) {
-//        return activeTokens.contains(token);
-//    }
+    public boolean isTokenActive(String token) {
+        return activeTokens.contains(token);
+    }
 
     public void removeToken(String token) {
         activeTokens.remove(token.substring(AuthenticationConfigConstants.TOKEN_PREFIX.length()));
