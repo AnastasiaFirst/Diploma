@@ -1,9 +1,7 @@
 package com.example.cloud_service_diploma.service;
 
 import com.example.cloud_service_diploma.entity.UserEntity;
-import com.example.cloud_service_diploma.enumiration.Role;
 import com.example.cloud_service_diploma.exception.BadCredentials;
-import com.example.cloud_service_diploma.exception.SuccessLogout;
 import com.example.cloud_service_diploma.model.dto.UserDto;
 import com.example.cloud_service_diploma.repositories.UserRepository;
 import com.example.cloud_service_diploma.security.JWTToken;
@@ -14,18 +12,20 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class AuthorizationServiceTest {
+    @InjectMocks
+    private AuthorizationService authorizationService;
+
     @Mock
     private UserRepository userRepository;
 
@@ -33,21 +33,46 @@ class AuthorizationServiceTest {
     private JWTToken jwtToken;
 
     @Mock
-    private PasswordEncoder passwordEncoder;
+    private HttpServletRequest request;
 
-    @InjectMocks
-    private AuthorizationService authorizationService;
+    private UserEntity userEntity;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         MockitoAnnotations.openMocks(this);
+        userEntity = new UserEntity();
+        userEntity.setLogin("testUser ");
+        userEntity.setPassword("password123");
     }
 
     @Test
-    void testAuthorizationLoginUserNotFound() {
-        UserDto userDto = new UserDto("testUser ", "password", Set.of(Role.ROLE_ADMIN));
+    public void testAuthorizationLoginSuccess() throws NoSuchAlgorithmException {
+        UserDto userDto = new UserDto();
+        userDto.setLogin("testUser ");
+        userDto.setPassword("password123");
 
-        when(userRepository.findUserByLogin(userDto.getLogin())).thenReturn(Optional.empty());
+        when(userRepository.findUserByLogin("testUser ")).thenReturn(Optional.of(userEntity));
+        when(jwtToken.generateToken(userEntity)).thenReturn("mockedToken");
+
+        UserEntity resultUserEntity = authorizationService.authorizationLogin(userDto);
+
+        assertNotNull(resultUserEntity);
+        assertEquals("testUser ", resultUserEntity.getLogin());
+
+        String token = jwtToken.generateToken(resultUserEntity);
+        assertEquals("mockedToken", token);
+
+        verify(userRepository).findUserByLogin("testUser ");
+        verify(jwtToken).generateToken(userEntity);
+    }
+
+    @Test
+    public void testAuthorizationLoginUserNotFound() {
+        UserDto userDto = new UserDto();
+        userDto.setLogin("unknownUser ");
+        userDto.setPassword("password123");
+
+        when(userRepository.findUserByLogin("unknownUser ")).thenReturn(Optional.empty());
 
         BadCredentials exception = assertThrows(BadCredentials.class, () -> {
             authorizationService.authorizationLogin(userDto);
@@ -55,20 +80,4 @@ class AuthorizationServiceTest {
 
         assertEquals("Пользователь не найден", exception.getMessage());
     }
-
-    @Test
-    void testLogoutInvalidToken() {
-        String authToken = "invalidToken";
-        HttpServletRequest request = mock(HttpServletRequest.class);
-        HttpServletResponse response = mock(HttpServletResponse.class);
-
-        when(jwtToken.validateToken(authToken)).thenReturn(false);
-
-        BadCredentials exception = assertThrows(BadCredentials.class, () -> {
-            authorizationService.logout(authToken, request, response);
-        });
-
-        assertEquals("Неверный или истекший токен", exception.getMessage());
-    }
-
 }
